@@ -5699,7 +5699,21 @@ void gentimetest(stardata *star,planetdata planet[MAXPLANETS],spotdata spot[MAXS
 
 int main(int argc,char *argv[])
 {
-	char filename[64],rootname[64],seedfilename[64];
+	char filename[64];
+	if(argc<=1)
+		sprintf(filename,DEFAULTFILENAME);
+	else
+		sprintf(filename,"%s",argv[1]);
+
+	processFile(filename);
+
+	return 0;
+}
+
+
+void processFile(const char *filename)
+{
+	char rootname[64],seedfilename[64];
 	int i,j;
 	int lcn;
 	int mcmcnpop,randomseed;
@@ -5719,11 +5733,6 @@ int main(int argc,char *argv[])
 	FIXSEEDEDONLYPHI=0;
 	
 	star=&thestar;
-	
-	if(argc<=1)
-		sprintf(filename,DEFAULTFILENAME);
-	else
-		sprintf(filename,"%s",argv[1]);
 
 	sprintf(rootname,"%s",filename);
 	for(j=0;j<64&&rootname[j]!=0;j++);
@@ -5930,8 +5939,6 @@ int main(int argc,char *argv[])
 #	if XYZDETAILS
 		fclose(xyzdetail);
 #	endif
-
-	return 0;
 }
 
 
