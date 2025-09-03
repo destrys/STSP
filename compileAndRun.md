@@ -1,10 +1,22 @@
 To compile
 
-	gcc -O2 -lm stsp.c -o stsp
+	gcc -O2 ./src/stsp.c -lm -o ./bin/stsp
+
+or
+
+	make
+
+or, for debugging
+
+    	make CFLAGS="-O0 -Wall -g"
 
 To run
 
-	stsp  inputfile.in
+	cd samples                  # or your own path containing data and configuration
+	/path/to/stsp sample-l.in   # or your own configuration file
+
+stsp expects "model_lc.dat" to be present in the directory from which
+stsp is run.
 
 The input file for stsp has the following structure:
 
