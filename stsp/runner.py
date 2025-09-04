@@ -1,5 +1,3 @@
-import os
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -24,10 +22,10 @@ def _ensure_binary() -> Path:
 
 
 class ActionRunner:
-    """Base class for building and running STSP configurations.
+    """Base class to assemble common STSP configuration and run an action.
 
-    Side-effectful operations (writing files, running binaries) are kept in the
-    top-level `run` method. Lower-level helpers only assemble strings.
+    Subclasses provide the action-specific section via `assemble_action()` and
+    can override `input_basename()` to control input/output file roots.
     """
 
     def __init__(self, config: STSP):
@@ -108,28 +106,8 @@ class ActionRunner:
             work = Path(workdir)
             work.mkdir(parents=True, exist_ok=True)
 
-        # Ensure data file exists locally if it’s a bare filename we expect
-        src_model = Path(__file__).resolve().parents[1] / "sample" / "model_lc.dat"
-        dst_model = work / "model_lc.dat"
-        if not dst_model.exists() and src_model.exists():
-            shutil.copy2(src_model, dst_model)
-
-        # Adjust fitting data filename to local basename to avoid path issues
-        fit = self.config.fitting_properties
-        local_fit = FittingProperties(
-            data_filename=Path(fit.data_filename).name,
-            start_time=fit.start_time,
-            light_curve_duration_days=fit.light_curve_duration_days,
-            light_data_max=fit.light_data_max,
-            light_curve_flattened=fit.light_curve_flattened,
-        )
-        cfg = STSP(
-            planets=self.config.planets,
-            star_properties=self.config.star_properties,
-            spot_properties=self.config.spot_properties,
-            fitting_properties=local_fit,
-        )
-        common = ActionRunner(cfg).assemble_common()
+        # Assemble configuration text
+        common = self.assemble_common()
         action = self.assemble_action()
 
         in_path = work / f"{self.input_basename()}.in"
@@ -213,8 +191,10 @@ def example_sample_config() -> Tuple[STSP, List[Tuple[float, float, float]], flo
 
     spots = SpotProperties(num_spots=6, fractional_brightness=0.70)
 
+    # Use an absolute path so runs in temporary working directories succeed.
+    sample_model = Path(__file__).resolve().parents[1] / "sample" / "model_lc.dat"
     fit = FittingProperties(
-        data_filename="model_lc.dat",
+        data_filename=str(sample_model),
         start_time=0.0,
         light_curve_duration_days=12.0,
         light_data_max=996.942768414,
