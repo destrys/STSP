@@ -2,13 +2,12 @@ import os
 import shutil
 import subprocess
 import tempfile
-from dataclasses import asdict
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .stsp import FittingProperties, PlanetProperties, SpotProperties, STSP, StarProperties
+from .stsp import FittingProperties, PlanetProperties, STSP, StarProperties, SpotProperties
 
 
 def _ensure_binary() -> Path:
@@ -24,122 +23,99 @@ def _ensure_binary() -> Path:
     return bin_path
 
 
-def _write_l_input(
-    config: STSP,
-    spot_triplets: Sequence[Tuple[float, float, float]],
-    brightness_correction: float,
-    out_path: Path,
-) -> None:
-    """Write an Action-l input file at `out_path`.
+class ActionRunner:
+    """Base class for building and running STSP configurations.
 
-    This mirrors the format used by sample/*.in and parsed by src/stsp.c.
+    Side-effectful operations (writing files, running binaries) are kept in the
+    top-level `run` method. Lower-level helpers only assemble strings.
     """
-    if len(config.planets) < 1:
-        raise ValueError("At least one planet is required for action l")
-    if len(spot_triplets) != config.spot_properties.num_spots:
-        raise ValueError(
-            f"Expected {config.spot_properties.num_spots} spot triplets, got {len(spot_triplets)}"
+
+    def __init__(self, config: STSP):
+        self.config = config
+
+    # ----- Assembly helpers (no side effects) -----
+    def assemble_common(self) -> str:
+        """Assemble the common (non-action) sections as a single string."""
+        if len(self.config.planets) < 1:
+            raise ValueError("At least one planet must be provided in config.planets")
+
+        s = self.config.star_properties
+        sp = self.config.spot_properties
+        f = self.config.fitting_properties
+
+        lines: List[str] = []
+
+        # PLANET PROPERTIES
+        lines.append("#PLANET PROPERTIES\n")
+        lines.append(f"{len(self.config.planets)}\n")
+        for p in self.config.planets:
+            lines.append(f"{p.t0_epoch_days}\n")
+            lines.append(f"{p.period_days}\n")
+            lines.append(f"{p.transit_depth}\n")
+            lines.append(f"{p.duration_days}\n")
+            lines.append(f"{p.impact_parameter}\n")
+            lines.append(f"{p.inclination_deg}\n")
+            lines.append(f"{p.lambda_deg}\n")
+            lines.append(f"{p.ecosw}\n")
+            lines.append(f"{p.esinw}\n")
+
+        # STAR PROPERTIES
+        lines.append("#STAR PROPERTIES\n")
+        lines.append(f"{s.mean_stellar_density}\n")
+        lines.append(f"{s.stellar_rotation_period_days}\n")
+        lines.append(f"{s.temperature_kelvin}\n")
+        lines.append(f"{s.stellar_metallicity}\n")
+        lines.append(f"{s.rotation_axis_tilt_deg}\n")
+        lines.append(
+            f"{s.limb_darkening[0]} {s.limb_darkening[1]} {s.limb_darkening[2]} {s.limb_darkening[3]}\n"
         )
+        lines.append(f"{s.num_limb_darkening_rings}\n")
 
-    p = config.planets[0]  # Action-l runs are typically single-planet
-    s = config.star_properties
-    sp = config.spot_properties
-    f = config.fitting_properties
+        # SPOT PROPERTIES
+        lines.append("#SPOT PROPERTIES\n")
+        lines.append(f"{sp.num_spots}\n")
+        lines.append(f"{sp.fractional_brightness}\n")
 
-    lines: List[str] = []
-    lines.append("#PLANET PROPERTIES\n")
-    lines.append("1\n")  # Number of planets (Python API uses a list; write 1 here)
-    lines.append(f"{p.t0_epoch_days}\t\t\t; T0, epoch         (middle of first transit) in days.\n")
-    lines.append(f"{p.period_days}\t\t\t; Planet Period      (days)\n")
-    lines.append(f"{p.transit_depth}\t\t; (Rp/Rs)^2         (Rplanet / Rstar )^ 2\n")
-    lines.append(f"{p.duration_days}\t\t\t; Duration (days)   (physical duration of transit, not used)\n")
-    lines.append(f"{p.impact_parameter}\t\t\t; Impact parameter  (0= planet cross over equator)\n")
-    lines.append(f"{p.inclination_deg}\t\t\t; Inclination angle of orbit (90 deg = planet crosses over equator)\n")
-    lines.append(f"{p.lambda_deg}\t\t\t; Lambda of orbit (0 deg = orbital axis along z-axis)\n")
-    lines.append(f"{p.ecosw}\t\t\t; ecosw\n")
-    lines.append(f"{p.esinw}\t\t\t; esinw\n")
+        # LIGHT CURVE
+        lines.append("#LIGHT CURVE\n")
+        lines.append(f"{f.data_filename}\n")
+        lines.append(f"{f.start_time}\n")
+        lines.append(f"{f.light_curve_duration_days}\n")
+        lines.append(f"{f.light_data_max}\n")
+        lines.append(f"{1 if f.light_curve_flattened else 0}\n")
 
-    lines.append("#STAR PROPERTIES\n")
-    lines.append(f"{s.mean_stellar_density}\t\t; Mean Stellar density (Msun/Rsun^3)\n")
-    lines.append(f"{s.stellar_rotation_period_days}\t\t\t; Stellar Rotation period (days)\n")
-    lines.append(f"{s.temperature_kelvin}\t\t\t; Stellar Temperature\n")
-    lines.append(f"{s.stellar_metallicity}\t\t\t; Stellar metallicity\n")
-    lines.append(
-        f"{s.rotation_axis_tilt_deg}\t\t\t; Tilt of the rotation axis of the star down from z-axis (degrees)\n"
-    )
-    lines.append(
-        f"{s.limb_darkening[0]} {s.limb_darkening[1]} {s.limb_darkening[2]} {s.limb_darkening[3]}\t; Limb darkening (4 coefficients)\n"
-    )
-    lines.append(f"{s.num_limb_darkening_rings}\t\t\t; number of rings for limb darkening appoximation\n")
+        return "".join(lines)
 
-    lines.append("#SPOT PROPERTIES\n")
-    lines.append(f"{sp.num_spots}\t\t\t\t; number of spots\n")
-    lines.append(
-        f"{sp.fractional_brightness}\t\t\t\t; fractional lightness of spots (0.0=total dark, 1.0=same as star)\n"
-    )
+    def assemble_action(self) -> str:
+        """Override in subclass to provide action-specific lines including #ACTION."""
+        raise NotImplementedError
 
-    lines.append("#LIGHT CURVE\n")
-    lines.append(
-        f"{config.fitting_properties.data_filename}\t\t\t; light curve input data file (only used to get times for generating lightcurve)\n"
-    )
-    lines.append(f"{f.start_time}\t\t\t\t; start time to start fitting the light curve\n")
-    lines.append(f"{f.light_curve_duration_days}\t\t\t; duration of light curve to fit (days)\n")
-    lines.append(
-        f"{f.light_data_max}\t\t\t; real maximum of light curve data (corrected for noise), 0 -> use downfrommax\t\n"
-    )
-    lines.append(
-        f"{1 if f.light_curve_flattened else 0}\t\t\t\t; is light curve flattened (to zero) outside of transits?\n"
-    )
+    def input_basename(self) -> str:
+        """Override to control the input filename base (without extension)."""
+        return "pyact"
 
-    lines.append("#ACTION\n")
-    lines.append("l\t\t\t; l= generate light curve from parameters\n")
-    for (r, th, ph) in spot_triplets:
-        lines.append(f"{r}\n{th}\n{ph}\n")
-    lines.append(f"{brightness_correction}\n")
+    # ----- Top-level run (side effects) -----
+    def run(self, workdir: Optional[Path] = None) -> Tuple[Path, np.ndarray, Path]:
+        bin_path = _ensure_binary()
 
-    out_path.write_text("".join(lines))
+        # Prepare working directory
+        made_temp = False
+        if workdir is None:
+            tdir = tempfile.TemporaryDirectory()
+            made_temp = True
+            work = Path(tdir.name)
+        else:
+            work = Path(workdir)
+            work.mkdir(parents=True, exist_ok=True)
 
-
-def run_action_l(
-    config: STSP,
-    spot_triplets: Sequence[Tuple[float, float, float]],
-    brightness_correction: float = 1.0,
-    workdir: Optional[Path] = None,
-) -> Tuple[Path, np.ndarray, Path]:
-    """Run Action-l end-to-end.
-
-    - Writes `pyact-l.in` in `workdir` (or a temp dir if None).
-    - Runs `./bin/stsp` with that config.
-    - Reads the output `*_lcout.txt` into a numpy array.
-    - Writes a second C-compatible copy named `pyact-l-copy.txt` in `workdir`.
-
-    Returns: (workdir, numpy_array, copy_path)
-    """
-    bin_path = _ensure_binary()
-
-    # Prepare working directory
-    made_temp = False
-    if workdir is None:
-        tdir = tempfile.TemporaryDirectory()
-        made_temp = True
-        work = Path(tdir.name)
-    else:
-        work = Path(workdir)
-        work.mkdir(parents=True, exist_ok=True)
-
-    try:
-        # Ensure model_lc.dat is present
+        # Ensure data file exists locally if it’s a bare filename we expect
         src_model = Path(__file__).resolve().parents[1] / "sample" / "model_lc.dat"
         dst_model = work / "model_lc.dat"
-        if not dst_model.exists():
+        if not dst_model.exists() and src_model.exists():
             shutil.copy2(src_model, dst_model)
 
-        # Input path
-        in_path = work / "pyact-l.in"
-
-        # If the fitting properties point to a filename only, keep it; otherwise
-        # rewrite to basename so stsp reads the local file.
-        fit = config.fitting_properties
+        # Adjust fitting data filename to local basename to avoid path issues
+        fit = self.config.fitting_properties
         local_fit = FittingProperties(
             data_filename=Path(fit.data_filename).name,
             start_time=fit.start_time,
@@ -148,45 +124,65 @@ def run_action_l(
             light_curve_flattened=fit.light_curve_flattened,
         )
         cfg = STSP(
-            planets=config.planets,
-            star_properties=config.star_properties,
-            spot_properties=config.spot_properties,
+            planets=self.config.planets,
+            star_properties=self.config.star_properties,
+            spot_properties=self.config.spot_properties,
             fitting_properties=local_fit,
         )
+        common = ActionRunner(cfg).assemble_common()
+        action = self.assemble_action()
 
-        _write_l_input(cfg, spot_triplets, brightness_correction, in_path)
+        in_path = work / f"{self.input_basename()}.in"
+        in_path.write_text(common + action)
 
-        # Run stsp with absolute config path so output uses the same rootname
-        proc = subprocess.run([str(bin_path), str(in_path)], cwd=str(work), check=True)
+        # Run stsp
+        subprocess.run([str(bin_path), str(in_path)], cwd=str(work), check=True)
 
-        # Output path is <root>_lcout.txt where root is input path without .in
+        # Read outputs
         rootname = str(in_path).rsplit(".in", 1)[0]
         out_path = Path(f"{rootname}_lcout.txt")
         if not out_path.exists():
             raise FileNotFoundError(f"Expected output not found: {out_path}")
-
-        # Read into numpy
         arr = np.loadtxt(out_path)
 
-        # Write C-compatible copy
-        copy_path = work / "pyact-l-copy.txt"
+        # Write a C-compatible copy
+        copy_path = work / f"{self.input_basename()}-copy.txt"
         with copy_path.open("w") as f:
             for row in np.atleast_2d(arr):
-                # Match the default lcgen formatting: time 9 dp, others 6 dp
                 if row.shape[0] >= 4:
-                    f.write(
-                        f"{row[0]:0.9f} {row[1]:0.6f} {row[2]:0.6f} {row[3]:0.6f}\n"
-                    )
+                    f.write(f"{row[0]:0.9f} {row[1]:0.6f} {row[2]:0.6f} {row[3]:0.6f}\n")
                 else:
-                    # Fallback: join with 6 dp
                     f.write(" ".join(f"{x:0.6f}" for x in row) + "\n")
 
         return work, arr, copy_path
-    finally:
-        if made_temp:
-            # Keep the temp dir alive for caller inspection? For now, cleanup.
-            # If persistent is desired, we could return the TemporaryDirectory object.
-            pass
+
+
+class ActionLRunner(ActionRunner):
+    def __init__(
+        self,
+        config: STSP,
+        spot_triplets: Sequence[Tuple[float, float, float]],
+        brightness_correction: float = 1.0,
+    ) -> None:
+        super().__init__(config)
+        if len(spot_triplets) != config.spot_properties.num_spots:
+            raise ValueError(
+                f"Expected {config.spot_properties.num_spots} spot triplets, got {len(spot_triplets)}"
+            )
+        self.spot_triplets = list(spot_triplets)
+        self.brightness_correction = brightness_correction
+
+    def input_basename(self) -> str:
+        return "pyact-l"
+
+    def assemble_action(self) -> str:
+        lines: List[str] = []
+        lines.append("#ACTION\n")
+        lines.append("l\n")
+        for (r, th, ph) in self.spot_triplets:
+            lines.append(f"{r}\n{th}\n{ph}\n")
+        lines.append(f"{self.brightness_correction}\n")
+        return "".join(lines)
 
 
 def example_sample_config() -> Tuple[STSP, List[Tuple[float, float, float]], float]:
@@ -239,4 +235,3 @@ def example_sample_config() -> Tuple[STSP, List[Tuple[float, float, float]], flo
     brightness = 1.0
 
     return cfg, spot_triplets, brightness
-

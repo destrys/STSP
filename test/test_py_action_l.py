@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import numpy as np
 
-from stsp.runner import example_sample_config, run_action_l
+from stsp.runner import ActionLRunner, example_sample_config
 
 
 class TestActionL(unittest.TestCase):
@@ -13,9 +13,8 @@ class TestActionL(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as td:
             work = Path(td)
-            workdir, arr, copy_path = run_action_l(
-                cfg, spot_triplets, brightness_correction=brightness, workdir=work
-            )
+            runner = ActionLRunner(cfg, spot_triplets, brightness_correction=brightness)
+            workdir, arr, copy_path = runner.run(workdir=work)
 
             # Input file
             in_path = work / "pyact-l.in"
