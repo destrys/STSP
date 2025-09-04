@@ -1,6 +1,6 @@
 To compile
 
-	gcc -O2 stsp.c -lm -o stsp
+	gcc -O2 ./src/stsp.c -lm -o ./bin/stsp
 
 or
 
