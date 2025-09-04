@@ -1,3 +1,4 @@
+import logging
 import unittest
 from pathlib import Path
 import tempfile
@@ -12,7 +13,9 @@ class TestActionL(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as td:
             work = Path(td)
-            workdir, arr, copy_path = run_action_l(cfg, spot_triplets, brightness_correction=brightness, workdir=work)
+            workdir, arr, copy_path = run_action_l(
+                cfg, spot_triplets, brightness_correction=brightness, workdir=work
+            )
 
             # Input file
             in_path = work / "pyact-l.in"
@@ -30,7 +33,28 @@ class TestActionL(unittest.TestCase):
             self.assertGreaterEqual(arr.shape[1], 4)
             self.assertGreater(arr.shape[0], 0)
 
+            # Debug: log the first 5 lines of each output for troubleshooting
+            logger = logging.getLogger(__name__)
+            try:
+                with out_path.open("r") as f:
+                    out_preview = "".join(f.readlines()[:5])
+                with copy_path.open("r") as f:
+                    py_preview = "".join(f.readlines()[:5])
+                logger.info("C output (first 5 lines) from %s:\n%s", out_path.name, out_preview)
+                logger.info("Python copy (first 5 lines) from %s:\n%s", copy_path.name, py_preview)
+            except Exception as e:
+                logger.info("Preview logging failed: %s", e)
+
+            # Verify Python copy numerically matches C output (first 4 columns)
+            c = np.loadtxt(out_path)
+            py = np.loadtxt(copy_path)
+            # Compare equal shapes in columns (py has exactly 4 columns by writer design)
+            self.assertEqual(py.shape[1], 4)
+            self.assertEqual(c.shape[0], py.shape[0])
+
+            # Use tolerances to account for decimal formatting on write
+            np.testing.assert_allclose(c[:, :4], py, rtol=1e-10, atol=5e-7)
+
 
 if __name__ == "__main__":
     unittest.main()
-
