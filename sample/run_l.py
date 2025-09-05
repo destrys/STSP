@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 from pathlib import Path
 from stsp import ActionL, PlanetProperties, StarProperties, SpotProperties, FittingProperties
-from stsp.runner import ActionLRunner, write_c_output
+from stsp.runner import ActionLRunner
+import numpy as np
 
 
 def main() -> None:
@@ -56,7 +57,7 @@ def main() -> None:
     runner = ActionLRunner(cfg)
     arr = runner.run(workdir=here, emit_copy=False)
     copy_path = here / 'pyact-l-copy.txt'
-    write_c_output(arr, copy_path)
+    np.savetxt(copy_path, arr, fmt='%.17g')
     print(f"Wrote: {here/'pyact-l.in'}")
     print(f"Wrote: {here/'pyact-l_lcout.txt'}")
     print(f"Wrote: {copy_path}")
