@@ -3,8 +3,33 @@ from typing import List, Tuple
 from pathlib import Path
 
 
+@dataclass 
+class STSPProperties:
+    def serialize_fields(self) -> List[str]:
+        out: List[str] = []
+        for f in fields(self):
+            val = getattr(self, f.name)
+            # Normalize booleans and common boolean-like strings to 0/1 expected by C
+            if isinstance(val, bool):
+                out.append(str(1 if val else 0) + "\n")
+                continue
+            if isinstance(val, str) and val.lower() in ("true", "false"):
+                out.append(str(1 if val.lower() == "true" else 0) + "\n")
+                continue
+            if isinstance(val, (list, tuple)):
+                try:
+                    out.append(" ".join(str(x) for x in val) + "\n")
+                except Exception:
+                    out.append(str(val) + "\n")
+            else:
+                out.append(str(val) + "\n")
+        return out
+
+
+
+
 @dataclass
-class PlanetProperties:
+class PlanetProperties(STSPProperties):
     """Orbital and transit properties for a single planet.
 
     - t0_epoch_days: T0, time of the middle of first transit in days  (Better if this number is closer to zero)
@@ -30,7 +55,7 @@ class PlanetProperties:
 
 
 @dataclass
-class StarProperties:
+class StarProperties(STSPProperties):
     """Star properties.
 
     - mean_stellar_density: Mean Stellar density (Msun/Rsun^3)  (related to a/Rstar)
@@ -52,7 +77,7 @@ class StarProperties:
 
 
 @dataclass
-class SpotProperties:
+class SpotProperties(STSPProperties):
     """Global spot configuration parameters.
 
     - num_spots: number of spots
@@ -64,7 +89,7 @@ class SpotProperties:
 
 
 @dataclass
-class FittingProperties:
+class FittingProperties(STSPProperties):
     """Description of the observed light curve segment to fit/generate.
 
     - data_filename: lightcurve data file
@@ -95,47 +120,23 @@ class Action:
     star_properties: StarProperties
     spot_properties: SpotProperties
     fitting_properties: FittingProperties
-    
-    # Serialization methods relying on dataclass field order
-    def _line(self, val) -> str:
-        return f"{val}\n"
-
-    def _serialize_fields(self, obj) -> List[str]:
-        out: List[str] = []
-        for f in fields(obj):
-            val = getattr(obj, f.name)
-            # Normalize booleans and common boolean-like strings to 0/1 expected by C
-            if isinstance(val, bool):
-                out.append(self._line(1 if val else 0))
-                continue
-            if isinstance(val, str) and val.lower() in ("true", "false"):
-                out.append(self._line(1 if val.lower() == "true" else 0))
-                continue
-            if isinstance(val, (list, tuple)):
-                try:
-                    out.append(" ".join(str(x) for x in val) + "\n")
-                except Exception:
-                    out.append(str(val) + "\n")
-            else:
-                out.append(self._line(val))
-        return out
 
     def serialize_common(self) -> str:
         lines: List[str] = []
         # PLANET PROPERTIES
         lines.append("#PLANET PROPERTIES\n")
-        lines.append(self._line(len(self.planets)))
+        lines.append(f"{len(self.planets)}\n")
         for p in self.planets:
-            lines.extend(self._serialize_fields(p))
+            lines.extend(p.serialize_fields())
         # STAR PROPERTIES
         lines.append("#STAR PROPERTIES\n")
-        lines.extend(self._serialize_fields(self.star_properties))
+        lines.extend(self.star_properties.serialize_fields())
         # SPOT PROPERTIES
         lines.append("#SPOT PROPERTIES\n")
-        lines.extend(self._serialize_fields(self.spot_properties))
+        lines.extend(self.spot_properties.serialize_fields())
         # LIGHT CURVE
         lines.append("#LIGHT CURVE\n")
-        lines.extend(self._serialize_fields(self.fitting_properties))
+        lines.extend(self.fitting_properties.serialize_fields())
         return "".join(lines)
 
     def serialize_action(self) -> str:
@@ -161,10 +162,10 @@ class ActionL(Action):
     def serialize_action(self) -> str:
         lines: List[str] = ["#ACTION\n", "l\n"]
         for (r, th, ph) in self.spot_triplets:
-            lines.append(self._line(r))
-            lines.append(self._line(th))
-            lines.append(self._line(ph))
-        lines.append(self._line(self.brightness_correction))
+            lines.append(f"{r}\n")
+            lines.append(f"{th}\n")
+            lines.append(f"{ph}\n")
+        lines.append(f"{self.brightness_correction}\n")
         return "".join(lines)
 
     def expected_output_suffix(self) -> str:
@@ -217,16 +218,16 @@ class ActionM(Action):
             self.calc_brightness_factor,
         ]
         for v in basic:
-            lines.append(self._line(v))
+            lines.append(f"{v}\n")
         if seeded:
-            lines.append(self._line(self.sigma_radius))
-            lines.append(self._line(self.sigma_angle))
+            lines.append(f"{self.sigma_radius}\n")
+            lines.append(f"{self.sigma_angle}\n")
             assert self.seed_spot_triplets is not None
             for (r, th, ph) in self.seed_spot_triplets:
-                lines.append(self._line(r))
-                lines.append(self._line(th))
-                lines.append(self._line(ph))
-            lines.append(self._line(self.seed_brightness_correction))
+                lines.append(f"{r}\n")
+                lines.append(f"{th}\n")
+                lines.append(f"{ph}\n")
+            lines.append(f"{self.seed_brightness_correction}\n")
         return "".join(lines)
 
     def expected_output_suffix(self) -> str:
