@@ -102,7 +102,7 @@ class ActionRunner:
         # Run stsp (assumes 'stsp' is available on PATH)
         try:
             subprocess.run(
-                ["stsp", str(in_path)],
+                ["stsp", in_path.name],
                 cwd=str(work),
                 check=True,
                 capture_output=True,
