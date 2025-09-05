@@ -2,7 +2,6 @@ STSP
 ====
 In and out of transit starspot modeling code
 
-
 V5.0.1  2022-04
 
 This version corrects a bug dealing MAXSPOTS.   
