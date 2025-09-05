@@ -5,7 +5,15 @@ from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from stsp.stsp import STSP, STSPActionL
+from stsp.stsp import (
+    STSP,
+    STSPActionL,
+    STSPActionM,
+    PlanetProperties,
+    StarProperties,
+    SpotProperties,
+    FittingProperties,
+)
 
 
 class ActionRunner:
@@ -69,8 +77,6 @@ class ActionRunner:
         lines.append(f"{f.light_data_max}\n")
         lines.append(f"{1 if f.light_curve_flattened else 0}\n")
 
-        lines.append("#ACTION\n")
-
         return "".join(lines)
 
     def assemble_action(self) -> str:
@@ -93,6 +99,18 @@ class ActionRunner:
         else:
             work = Path(workdir)
             work.mkdir(parents=True, exist_ok=True)
+
+        # Ensure the light curve file is accessible from the working directory
+        fit = self.config.fitting_properties
+        lc_path = Path(fit.data_filename)
+        if not lc_path.is_absolute():
+            # If a bare filename is provided and it does not exist in workdir,
+            # try to source it from the repo sample/ directory.
+            candidate = work / lc_path.name
+            if not candidate.exists():
+                repo_candidate = Path(__file__).resolve().parents[1] / "sample" / lc_path.name
+                if repo_candidate.exists():
+                    candidate.write_bytes(repo_candidate.read_bytes())
 
         # Assemble configuration text
         common = self.assemble_common()
@@ -136,7 +154,22 @@ class ActionRunner:
         rootname = str(in_path).rsplit(".in", 1)[0]
         out_path = Path(f"{rootname}_lcout.txt")
         if not out_path.exists():
-            raise FileNotFoundError(f"Expected output not found: {out_path}")
+            # Provide helpful diagnostics when expected outputs are missing
+            err_path = Path(f"{rootname}_errstsp.txt")
+            msg = [f"Expected output not found: {out_path}"]
+            if err_path.exists():
+                try:
+                    with err_path.open("r") as f:
+                        err_preview = "".join(f.readlines()[:80])
+                    msg.append(f"--- {err_path.name} (first 80 lines) ---\n{err_preview}")
+                except Exception:
+                    pass
+            try:
+                files = "\n".join(sorted(p.name for p in Path(work).iterdir()))
+                msg.append(f"--- workdir listing ({work}) ---\n{files}")
+            except Exception:
+                pass
+            raise FileNotFoundError("\n\n".join(msg))
         arr = np.loadtxt(out_path)
 
         # Write a C-compatible copy
@@ -168,8 +201,59 @@ class ActionLRunner(ActionRunner):
 
     def assemble_action(self) -> str:
         lines: List[str] = []
+        lines.append("#ACTION\n")
         lines.append("l\n")
         for (r, th, ph) in self.config.spot_triplets:  # type: ignore[attr-defined]
             lines.append(f"{r}\n{th}\n{ph}\n")
         lines.append(f"{self.config.brightness_correction}\n")  # type: ignore[attr-defined]
+        return "".join(lines)
+
+
+class ActionMRunner(ActionRunner):
+    def __init__(self, config: STSPActionM) -> None:
+        super().__init__(config)
+        seeded_fields = [
+            config.sigma_radius,
+            config.sigma_angle,
+            config.seed_spot_triplets,
+            config.seed_brightness_correction,
+        ]
+        any_seed = any(v is not None for v in seeded_fields)
+        all_seed = (
+            config.sigma_radius is not None
+            and config.sigma_angle is not None
+            and config.seed_spot_triplets is not None
+            and config.seed_brightness_correction is not None
+        )
+        if any_seed and not all_seed:
+            raise ValueError(
+                "Seeded MCMC requires sigma_radius, sigma_angle, seed_spot_triplets, and seed_brightness_correction"
+            )
+        if all_seed:
+            if len(config.seed_spot_triplets) != config.spot_properties.num_spots:  # type: ignore[arg-type]
+                raise ValueError(
+                    f"Expected {config.spot_properties.num_spots} seed spot triplets, got {len(config.seed_spot_triplets or [])}"
+                )
+        self._is_seeded = all_seed
+
+    def input_basename(self) -> str:
+        return f"{super().input_basename()}-{'s' if self._is_seeded else 'm'}"
+
+    def assemble_action(self) -> str:
+        c = self.config  # type: ignore[assignment]
+        lines: List[str] = []
+        lines.append("#ACTION\n")
+        lines.append("s\n" if self._is_seeded else "m\n")
+        # 5 basic MCMC params
+        lines.append(f"{c.random_seed}\n")
+        lines.append(f"{c.ascale}\n")
+        lines.append(f"{c.num_chains}\n")
+        lines.append(f"{c.steps_or_time}\n")
+        lines.append(f"{c.calc_brightness_factor}\n")
+        if self._is_seeded:
+            lines.append(f"{c.sigma_radius}\n")
+            lines.append(f"{c.sigma_angle}\n")
+            for (r, th, ph) in c.seed_spot_triplets:  # type: ignore[union-attr]
+                lines.append(f"{r}\n{th}\n{ph}\n")
+            lines.append(f"{c.seed_brightness_correction}\n")
         return "".join(lines)

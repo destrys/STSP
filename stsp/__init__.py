@@ -5,4 +5,5 @@ from .stsp import (
     FittingProperties,
     STSP,
     STSPActionL,
+    STSPActionM,
 )

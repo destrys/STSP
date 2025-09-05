@@ -108,3 +108,34 @@ class STSPActionL(STSP):
 
     spot_triplets: List[Tuple[float, float, float]]
     brightness_correction: float = 1.0
+
+
+@dataclass
+class STSPActionM(STSP):
+    """STSP configuration for affine-invariant MCMC (Action-m/s).
+
+    Unseeded (Action-m): provide the 5 MCMC parameters below and leave the
+    seeded options as None. Seeded (Action-s): also provide `sigma_radius`,
+    `sigma_angle`, and a single set of spot parameters for all spots.
+
+    - random_seed: Random seed.
+    - ascale: MCMC a scale parameter.
+    - num_chains: Number of chains (population size).
+    - steps_or_time: Number of steps (or time if negative; see C code).
+    - calc_brightness_factor: 0 = use downfrommax, 1 = calculate brightness factor.
+    - sigma_radius: Optional; required for seeded runs (Action-s).
+    - sigma_angle: Optional; required for seeded runs (Action-s).
+    - seed_spot_triplets: Optional spot (r, theta, phi) for each spot (Action-s).
+    - seed_brightness_correction: Optional brightness factor paired with seeds.
+    """
+
+    random_seed: int
+    ascale: float
+    num_chains: int
+    steps_or_time: int
+    calc_brightness_factor: int
+
+    sigma_radius: float | None = None
+    sigma_angle: float | None = None
+    seed_spot_triplets: List[Tuple[float, float, float]] | None = None
+    seed_brightness_correction: float | None = None
