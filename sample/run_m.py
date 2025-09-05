@@ -2,6 +2,7 @@
 from pathlib import Path
 from stsp import ActionM, PlanetProperties, StarProperties, SpotProperties, FittingProperties
 from stsp.runner import ActionMRunner
+import numpy as np
 
 
 def main() -> None:
@@ -48,9 +49,12 @@ def main() -> None:
         calc_brightness_factor=1,
     )
     runner = ActionMRunner(cfg)
-    workdir, arr, final_path = runner.run(workdir=here)
+    arr = runner.run(workdir=here)
+    copy_path = here / 'pyact-m-finalparam-copy.txt'
+    np.savetxt(copy_path, arr, fmt='%.17g')
     print(f"Wrote: {here/'pyact-m.in'}")
-    print(f"Wrote: {final_path}")
+    print(f"Wrote: {here/'pyact-m_finalparam.txt'}")
+    print(f"Wrote: {copy_path}")
 
 
 if __name__ == "__main__":

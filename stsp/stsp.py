@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import List, Tuple
+from pathlib import Path
 
 
 @dataclass
@@ -139,3 +140,97 @@ class ActionM(Action):
     sigma_angle: float | None = None
     seed_spot_triplets: List[Tuple[float, float, float]] | None = None
     seed_brightness_correction: float | None = None
+
+
+# --- Serialization helpers ---
+
+def _line(val) -> str:
+    return f"{val}\n"
+
+
+def serialize_common(action: Action) -> str:
+    lines: List[str] = []
+    # PLANET PROPERTIES
+    lines.append("#PLANET PROPERTIES\n")
+    lines.append(_line(len(action.planets)))
+    for p in action.planets:
+        lines.append(_line(p.t0_epoch_days))
+        lines.append(_line(p.period_days))
+        lines.append(_line(p.transit_depth))
+        lines.append(_line(p.duration_days))
+        lines.append(_line(p.impact_parameter))
+        lines.append(_line(p.inclination_deg))
+        lines.append(_line(p.lambda_deg))
+        lines.append(_line(p.ecosw))
+        lines.append(_line(p.esinw))
+
+    # STAR PROPERTIES
+    s = action.star_properties
+    lines.append("#STAR PROPERTIES\n")
+    lines.append(_line(s.mean_stellar_density))
+    lines.append(_line(s.stellar_rotation_period_days))
+    lines.append(_line(s.temperature_kelvin))
+    lines.append(_line(s.stellar_metallicity))
+    lines.append(_line(s.rotation_axis_tilt_deg))
+    lines.append(f"{s.limb_darkening[0]} {s.limb_darkening[1]} {s.limb_darkening[2]} {s.limb_darkening[3]}\n")
+    lines.append(_line(s.num_limb_darkening_rings))
+
+    # SPOT PROPERTIES
+    sp = action.spot_properties
+    lines.append("#SPOT PROPERTIES\n")
+    lines.append(_line(sp.num_spots))
+    lines.append(_line(sp.fractional_brightness))
+
+    # LIGHT CURVE
+    f = action.fitting_properties
+    lines.append("#LIGHT CURVE\n")
+    lines.append(_line(f.data_filename))
+    lines.append(_line(f.start_time))
+    lines.append(_line(f.light_curve_duration_days))
+    lines.append(_line(f.light_data_max))
+    lines.append(_line(1 if f.light_curve_flattened else 0))
+
+    return "".join(lines)
+
+
+def serialize_action_l(action: ActionL) -> str:
+    lines: List[str] = ["#ACTION\n", "l\n"]
+    for (r, th, ph) in action.spot_triplets:
+        lines.append(_line(r))
+        lines.append(_line(th))
+        lines.append(_line(ph))
+    lines.append(_line(action.brightness_correction))
+    return "".join(lines)
+
+
+def serialize_action_m(action: ActionM) -> str:
+    seeded = (
+        action.sigma_radius is not None
+        and action.sigma_angle is not None
+        and action.seed_spot_triplets is not None
+        and action.seed_brightness_correction is not None
+    )
+    lines: List[str] = ["#ACTION\n", ("s\n" if seeded else "m\n")]
+    lines.append(_line(action.random_seed))
+    lines.append(_line(action.ascale))
+    lines.append(_line(action.num_chains))
+    lines.append(_line(action.steps_or_time))
+    lines.append(_line(action.calc_brightness_factor))
+    if seeded:
+        lines.append(_line(action.sigma_radius))
+        lines.append(_line(action.sigma_angle))
+        for (r, th, ph) in action.seed_spot_triplets:  # type: ignore[misc]
+            lines.append(_line(r))
+            lines.append(_line(th))
+            lines.append(_line(ph))
+        lines.append(_line(action.seed_brightness_correction))
+    return "".join(lines)
+
+
+def expected_output_suffix(action: Action) -> str:
+    if isinstance(action, ActionL):
+        return "_lcout.txt"
+    if isinstance(action, ActionM):
+        return "_finalparam.txt"
+    # Default to err to force early failure if not overridden
+    return "_out.txt"

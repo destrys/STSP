@@ -5,15 +5,7 @@ from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from stsp.stsp import (
-    Action,
-    ActionL,
-    ActionM,
-    PlanetProperties,
-    StarProperties,
-    SpotProperties,
-    FittingProperties,
-)
+from stsp.stsp import Action, ActionL, ActionM, serialize_common, serialize_action_l, serialize_action_m, expected_output_suffix
 
 
 class ActionRunner:
@@ -28,56 +20,7 @@ class ActionRunner:
 
     # ----- Assembly helpers (no side effects) -----
     def assemble_common(self) -> str:
-        """Assemble the common (non-action) sections as a single string."""
-        if len(self.config.planets) < 1:
-            raise ValueError("At least one planet must be provided in config.planets")
-
-        s = self.config.star_properties
-        sp = self.config.spot_properties
-        f = self.config.fitting_properties
-
-        lines: List[str] = []
-
-        # PLANET PROPERTIES
-        lines.append("#PLANET PROPERTIES\n")
-        lines.append(f"{len(self.config.planets)}\n")
-        for p in self.config.planets:
-            lines.append(f"{p.t0_epoch_days}\n")
-            lines.append(f"{p.period_days}\n")
-            lines.append(f"{p.transit_depth}\n")
-            lines.append(f"{p.duration_days}\n")
-            lines.append(f"{p.impact_parameter}\n")
-            lines.append(f"{p.inclination_deg}\n")
-            lines.append(f"{p.lambda_deg}\n")
-            lines.append(f"{p.ecosw}\n")
-            lines.append(f"{p.esinw}\n")
-
-        # STAR PROPERTIES
-        lines.append("#STAR PROPERTIES\n")
-        lines.append(f"{s.mean_stellar_density}\n")
-        lines.append(f"{s.stellar_rotation_period_days}\n")
-        lines.append(f"{s.temperature_kelvin}\n")
-        lines.append(f"{s.stellar_metallicity}\n")
-        lines.append(f"{s.rotation_axis_tilt_deg}\n")
-        lines.append(
-            f"{s.limb_darkening[0]} {s.limb_darkening[1]} {s.limb_darkening[2]} {s.limb_darkening[3]}\n"
-        )
-        lines.append(f"{s.num_limb_darkening_rings}\n")
-
-        # SPOT PROPERTIES
-        lines.append("#SPOT PROPERTIES\n")
-        lines.append(f"{sp.num_spots}\n")
-        lines.append(f"{sp.fractional_brightness}\n")
-
-        # LIGHT CURVE
-        lines.append("#LIGHT CURVE\n")
-        lines.append(f"{f.data_filename}\n")
-        lines.append(f"{f.start_time}\n")
-        lines.append(f"{f.light_curve_duration_days}\n")
-        lines.append(f"{f.light_data_max}\n")
-        lines.append(f"{1 if f.light_curve_flattened else 0}\n")
-
-        return "".join(lines)
+        return serialize_common(self.config)
 
     def assemble_action(self) -> str:
         """Override in subclass to provide action-specific lines including #ACTION."""
@@ -159,8 +102,8 @@ class ActionRunner:
     def run(self, workdir: Optional[Path] = None, emit_copy: bool = False) -> np.ndarray:
         work, rootname = self._prepare_and_run(workdir)
 
-        # Read outputs (Action-L style)
-        out_path = Path(f"{rootname}_lcout.txt")
+        # Read outputs using expected suffix for this action
+        out_path = Path(f"{rootname}{expected_output_suffix(self.config)}")
         if not out_path.exists():
             # Provide helpful diagnostics when expected outputs are missing
             err_path = Path(f"{rootname}_errstsp.txt")
@@ -199,13 +142,7 @@ class ActionLRunner(ActionRunner):
         return f"{super().input_basename()}-l"
 
     def assemble_action(self) -> str:
-        lines: List[str] = []
-        lines.append("#ACTION\n")
-        lines.append("l\n")
-        for (r, th, ph) in self.config.spot_triplets:  # type: ignore[attr-defined]
-            lines.append(f"{r}\n{th}\n{ph}\n")
-        lines.append(f"{self.config.brightness_correction}\n")  # type: ignore[attr-defined]
-        return "".join(lines)
+        return serialize_action_l(self.config)  # type: ignore[arg-type]
 
 
 class ActionMRunner(ActionRunner):
@@ -239,23 +176,7 @@ class ActionMRunner(ActionRunner):
         return f"{super().input_basename()}-{'s' if self._is_seeded else 'm'}"
 
     def assemble_action(self) -> str:
-        c = self.config  # type: ignore[assignment]
-        lines: List[str] = []
-        lines.append("#ACTION\n")
-        lines.append("s\n" if self._is_seeded else "m\n")
-        # 5 basic MCMC params
-        lines.append(f"{c.random_seed}\n")
-        lines.append(f"{c.ascale}\n")
-        lines.append(f"{c.num_chains}\n")
-        lines.append(f"{c.steps_or_time}\n")
-        lines.append(f"{c.calc_brightness_factor}\n")
-        if self._is_seeded:
-            lines.append(f"{c.sigma_radius}\n")
-            lines.append(f"{c.sigma_angle}\n")
-            for (r, th, ph) in c.seed_spot_triplets:  # type: ignore[union-attr]
-                lines.append(f"{r}\n{th}\n{ph}\n")
-            lines.append(f"{c.seed_brightness_correction}\n")
-        return "".join(lines)
+        return serialize_action_m(self.config)  # type: ignore[arg-type]
 
     def run(self, workdir: Optional[Path] = None, emit_copy: bool = False) -> np.ndarray:
         work, rootname = self._prepare_and_run(workdir)
