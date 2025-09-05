@@ -2863,7 +2863,7 @@ int filereadd(int n,double *x,char *datastr,int *current,int end)
 	{
 		if(datastr[a]>57||datastr[a]<45||datastr[a]==47)
 		{
-		  printf("input is not a number\n");
+			printf("input is not a number\n");
 			return -1;
 		}
 		b=a;
@@ -5699,21 +5699,7 @@ void gentimetest(stardata *star,planetdata planet[MAXPLANETS],spotdata spot[MAXS
 
 int main(int argc,char *argv[])
 {
-	char filename[64];
-	if(argc<=1)
-		sprintf(filename,DEFAULTFILENAME);
-	else
-		sprintf(filename,"%s",argv[1]);
-
-	processFile(filename);
-
-	return 0;
-}
-
-
-void processFile(const char *filename)
-{
-	char rootname[64],seedfilename[64];
+	char filename[64],rootname[64],seedfilename[64];
 	int i,j;
 	int lcn;
 	int mcmcnpop,randomseed;
@@ -5733,6 +5719,11 @@ void processFile(const char *filename)
 	FIXSEEDEDONLYPHI=0;
 	
 	star=&thestar;
+	
+	if(argc<=1)
+		sprintf(filename,DEFAULTFILENAME);
+	else
+		sprintf(filename,"%s",argv[1]);
 
 	sprintf(rootname,"%s",filename);
 	for(j=0;j<64&&rootname[j]!=0;j++);
@@ -5939,6 +5930,8 @@ void processFile(const char *filename)
 #	if XYZDETAILS
 		fclose(xyzdetail);
 #	endif
+
+	return 0;
 }
 
 
