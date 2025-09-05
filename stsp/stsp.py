@@ -94,3 +94,17 @@ class STSP:
     star_properties: StarProperties
     spot_properties: SpotProperties
     fitting_properties: FittingProperties
+
+
+@dataclass
+class STSPActionL(STSP):
+    """STSP configuration for Action-l (generate light curve).
+
+    Extends STSP by adding action-specific parameters.
+
+    - spot_triplets: For each spot, radius, theta (radians), phi (radians).
+    - brightness_correction: Brightness correction factor associated with this spot model.
+    """
+
+    spot_triplets: List[Tuple[float, float, float]]
+    brightness_correction: float = 1.0

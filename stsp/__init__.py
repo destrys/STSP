@@ -4,5 +4,5 @@ from .stsp import (
     SpotProperties,
     FittingProperties,
     STSP,
+    STSPActionL,
 )
-

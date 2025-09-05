@@ -5,7 +5,7 @@ from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .stsp import FittingProperties, PlanetProperties, STSP, StarProperties, SpotProperties
+from stsp.stsp import STSP, STSPActionL
 
 
 class ActionRunner:
@@ -100,7 +100,35 @@ class ActionRunner:
         in_path.write_text(common + action)
 
         # Run stsp (assumes 'stsp' is available on PATH)
-        subprocess.run(["stsp", str(in_path)], cwd=str(work), check=True)
+        try:
+            subprocess.run(
+                ["stsp", str(in_path)],
+                cwd=str(work),
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as e:
+            rootname = str(in_path).rsplit(".in", 1)[0]
+            err_path = Path(f"{rootname}_errstsp.txt")
+            err_preview = None
+            if err_path.exists():
+                try:
+                    with err_path.open("r") as f:
+                        err_preview = "".join(f.readlines()[:40])
+                except Exception:
+                    err_preview = None
+            msg = [
+                f"stsp failed with exit code {e.returncode}",
+                f"cmd: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}",
+            ]
+            if e.stdout:
+                msg.append("--- stdout ---\n" + e.stdout)
+            if e.stderr:
+                msg.append("--- stderr ---\n" + e.stderr)
+            if err_preview:
+                msg.append(f"--- {err_path.name} (first 40 lines) ---\n" + err_preview)
+            raise RuntimeError("\n\n".join(msg))
 
         # Read outputs
         rootname = str(in_path).rsplit(".in", 1)[0]
@@ -126,19 +154,12 @@ class ActionRunner:
 
 
 class ActionLRunner(ActionRunner):
-    def __init__(
-        self,
-        config: STSP,
-        spot_triplets: Sequence[Tuple[float, float, float]],
-        brightness_correction: float = 1.0,
-    ) -> None:
+    def __init__(self, config: STSPActionL) -> None:
         super().__init__(config)
-        if len(spot_triplets) != config.spot_properties.num_spots:
+        if len(config.spot_triplets) != config.spot_properties.num_spots:
             raise ValueError(
-                f"Expected {config.spot_properties.num_spots} spot triplets, got {len(spot_triplets)}"
+                f"Expected {config.spot_properties.num_spots} spot triplets, got {len(config.spot_triplets)}"
             )
-        self.spot_triplets = list(spot_triplets)
-        self.brightness_correction = brightness_correction
 
     def input_basename(self) -> str:
         return f"{super().input_basename()}-l"
@@ -147,61 +168,7 @@ class ActionLRunner(ActionRunner):
         lines: List[str] = []
         lines.append("#ACTION\n")
         lines.append("l\n")
-        for (r, th, ph) in self.spot_triplets:
+        for (r, th, ph) in self.config.spot_triplets:  # type: ignore[attr-defined]
             lines.append(f"{r}\n{th}\n{ph}\n")
-        lines.append(f"{self.brightness_correction}\n")
+        lines.append(f"{self.config.brightness_correction}\n")  # type: ignore[attr-defined]
         return "".join(lines)
-
-
-def example_sample_config() -> Tuple[STSP, List[Tuple[float, float, float]], float]:
-    """Build a sample STSP config matching sample-l.in values."""
-    planets = [
-        PlanetProperties(
-            t0_epoch_days=1.0,
-            period_days=1.5,
-            transit_depth=0.0038688,
-            duration_days=0.120,
-            impact_parameter=0.732,
-            inclination_deg=90.0,
-            lambda_deg=0.0,
-            ecosw=0.0,
-            esinw=0.0,
-        )
-    ]
-
-    star = StarProperties(
-        mean_stellar_density=1.3450000,
-        stellar_rotation_period_days=12.0,
-        temperature_kelvin=5576,
-        stellar_metallicity=0.0,
-        rotation_axis_tilt_deg=0.0,
-        limb_darkening=(0.5742, -0.2175, 0.8311, -0.4144),
-        num_limb_darkening_rings=100,
-    )
-
-    spots = SpotProperties(num_spots=6, fractional_brightness=0.70)
-
-    # Use an absolute path so runs in temporary working directories succeed.
-    sample_model = Path(__file__).resolve().parents[1] / "sample" / "model_lc.dat"
-    fit = FittingProperties(
-        data_filename=str(sample_model),
-        start_time=0.0,
-        light_curve_duration_days=12.0,
-        light_data_max=996.942768414,
-        light_curve_flattened=False,
-    )
-
-    cfg = STSP(planets=planets, star_properties=star, spot_properties=spots, fitting_properties=fit)
-
-    spot_triplets = [
-        (0.382525700680, 2.026108848159, 0.744618637426),
-        (0.290572978656, 1.727405120396, 1.570800631939),
-        (0.301035942796, 1.315591006119, 2.163399563938),
-        (0.213239119426, 1.844123549292, 3.372735964458),
-        (0.292627124386, 1.100571758314, 4.248530337143),
-        (0.300349989200, 1.963252856264, 5.492592578403),
-    ]
-
-    brightness = 1.0
-
-    return cfg, spot_triplets, brightness
