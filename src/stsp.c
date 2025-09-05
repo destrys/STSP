@@ -2863,7 +2863,7 @@ int filereadd(int n,double *x,char *datastr,int *current,int end)
 	{
 		if(datastr[a]>57||datastr[a]<45||datastr[a]==47)
 		{
-		  printf("input is not a number\n");
+			printf("input is not a number\n");
 			return -1;
 		}
 		b=a;
