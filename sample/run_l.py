@@ -55,7 +55,7 @@ def main() -> None:
         brightness_correction=1.0,
     )
     runner = ActionLRunner(cfg)
-    arr = runner.run(workdir=here, emit_copy=False)
+    arr = runner.run(workdir=here)
     copy_path = here / 'pyact-l-copy.txt'
     np.savetxt(copy_path, arr, fmt='%.17g')
     print(f"Wrote: {here/'pyact-l.in'}")

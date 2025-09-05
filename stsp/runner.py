@@ -99,7 +99,7 @@ class ActionRunner:
         rootname = str(in_path).rsplit(".in", 1)[0]
         return work, rootname
 
-    def run(self, workdir: Optional[Path] = None, emit_copy: bool = False) -> np.ndarray:
+    def run(self, workdir: Optional[Path] = None) -> np.ndarray:
         work, rootname = self._prepare_and_run(workdir)
 
         # Read outputs using expected suffix for this action
@@ -122,11 +122,6 @@ class ActionRunner:
                 pass
             raise FileNotFoundError("\n\n".join(msg))
         arr = np.loadtxt(out_path)
-
-        if emit_copy:
-            copy_path = Path(work) / f"{self.input_basename()}-copy.txt"
-            write_c_output(arr, copy_path)
-
         return arr
 
 

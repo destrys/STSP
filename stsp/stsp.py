@@ -219,6 +219,7 @@ def serialize_action_m(action: ActionM) -> str:
     if seeded:
         lines.append(_line(action.sigma_radius))
         lines.append(_line(action.sigma_angle))
+        assert action.seed_spot_triplets is not None
         for (r, th, ph) in action.seed_spot_triplets:  # type: ignore[misc]
             lines.append(_line(r))
             lines.append(_line(th))
