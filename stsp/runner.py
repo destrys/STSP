@@ -20,7 +20,7 @@ class ActionRunner:
 
     # ----- Assembly helpers (no side effects) -----
     def assemble_common(self) -> str:
-        return serialize_common(self.config)
+        return self.config.serialize_common()
 
     def assemble_action(self) -> str:
         """Override in subclass to provide action-specific lines including #ACTION."""
@@ -173,29 +173,4 @@ class ActionMRunner(ActionRunner):
     def assemble_action(self) -> str:
         return self.config.serialize_action()  # type: ignore[assignment]
 
-    def run(self, workdir: Optional[Path] = None, emit_copy: bool = False) -> np.ndarray:
-        work, rootname = self._prepare_and_run(workdir)
-
-        # For MCMC actions, primary artifact is finalparam
-        final_path = Path(f"{rootname}_finalparam.txt")
-        if not final_path.exists():
-            # Bubble up useful info
-            err_path = Path(f"{rootname}_errstsp.txt")
-            msg = [f"Expected output not found: {final_path}"]
-            if err_path.exists():
-                try:
-                    with err_path.open("r") as f:
-                        err_preview = "".join(f.readlines()[:80])
-                    msg.append(f"--- {err_path.name} (first 80 lines) ---\n{err_preview}")
-                except Exception:
-                    pass
-            try:
-                files = "\n".join(sorted(p.name for p in Path(work).iterdir()))
-                msg.append(f"--- workdir listing ({work}) ---\n{files}")
-            except Exception:
-                pass
-            raise FileNotFoundError("\n\n".join(msg))
-
-        # Load as a flat array for convenience
-        arr = np.loadtxt(final_path)
-        return arr
+    # No custom run; base class run() handles output lookup via expected_output_suffix
