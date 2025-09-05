@@ -5,7 +5,7 @@ from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from stsp.stsp import Action, ActionL, ActionM, serialize_common, serialize_action_l, serialize_action_m, expected_output_suffix
+from stsp.stsp import Action, ActionL, ActionM
 
 
 class ActionRunner:
@@ -103,7 +103,7 @@ class ActionRunner:
         work, rootname = self._prepare_and_run(workdir)
 
         # Read outputs using expected suffix for this action
-        out_path = Path(f"{rootname}{expected_output_suffix(self.config)}")
+        out_path = Path(f"{rootname}{self.config.expected_output_suffix()}")
         if not out_path.exists():
             # Provide helpful diagnostics when expected outputs are missing
             err_path = Path(f"{rootname}_errstsp.txt")
@@ -137,7 +137,7 @@ class ActionLRunner(ActionRunner):
         return f"{super().input_basename()}-l"
 
     def assemble_action(self) -> str:
-        return serialize_action_l(self.config)  # type: ignore[arg-type]
+        return self.config.serialize_action()  # type: ignore[assignment]
 
 
 class ActionMRunner(ActionRunner):
@@ -171,7 +171,7 @@ class ActionMRunner(ActionRunner):
         return f"{super().input_basename()}-{'s' if self._is_seeded else 'm'}"
 
     def assemble_action(self) -> str:
-        return serialize_action_m(self.config)  # type: ignore[arg-type]
+        return self.config.serialize_action()  # type: ignore[assignment]
 
     def run(self, workdir: Optional[Path] = None, emit_copy: bool = False) -> np.ndarray:
         work, rootname = self._prepare_and_run(workdir)

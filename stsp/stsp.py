@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import List, Tuple
 from pathlib import Path
 
@@ -95,6 +95,47 @@ class Action:
     star_properties: StarProperties
     spot_properties: SpotProperties
     fitting_properties: FittingProperties
+    
+    # Serialization methods relying on dataclass field order
+    def _line(self, val) -> str:
+        return f"{val}\n"
+
+    def _serialize_fields(self, obj) -> List[str]:
+        out: List[str] = []
+        for f in fields(obj):
+            val = getattr(obj, f.name)
+            if isinstance(val, (list, tuple)):
+                try:
+                    out.append(" ".join(str(x) for x in val) + "\n")
+                except Exception:
+                    out.append(str(val) + "\n")
+            else:
+                out.append(self._line(val))
+        return out
+
+    def serialize_common(self) -> str:
+        lines: List[str] = []
+        # PLANET PROPERTIES
+        lines.append("#PLANET PROPERTIES\n")
+        lines.append(self._line(len(self.planets)))
+        for p in self.planets:
+            lines.extend(self._serialize_fields(p))
+        # STAR PROPERTIES
+        lines.append("#STAR PROPERTIES\n")
+        lines.extend(self._serialize_fields(self.star_properties))
+        # SPOT PROPERTIES
+        lines.append("#SPOT PROPERTIES\n")
+        lines.extend(self._serialize_fields(self.spot_properties))
+        # LIGHT CURVE
+        lines.append("#LIGHT CURVE\n")
+        lines.extend(self._serialize_fields(self.fitting_properties))
+        return "".join(lines)
+
+    def serialize_action(self) -> str:
+        raise NotImplementedError
+
+    def expected_output_suffix(self) -> str:
+        raise NotImplementedError
 
 
 @dataclass
@@ -109,6 +150,18 @@ class ActionL(Action):
 
     spot_triplets: List[Tuple[float, float, float]]
     brightness_correction: float = 1.0
+
+    def serialize_action(self) -> str:
+        lines: List[str] = ["#ACTION\n", "l\n"]
+        for (r, th, ph) in self.spot_triplets:
+            lines.append(self._line(r))
+            lines.append(self._line(th))
+            lines.append(self._line(ph))
+        lines.append(self._line(self.brightness_correction))
+        return "".join(lines)
+
+    def expected_output_suffix(self) -> str:
+        return "_lcout.txt"
 
 
 @dataclass
@@ -141,97 +194,34 @@ class ActionM(Action):
     seed_spot_triplets: List[Tuple[float, float, float]] | None = None
     seed_brightness_correction: float | None = None
 
+    def serialize_action(self) -> str:
+        seeded = (
+            self.sigma_radius is not None
+            and self.sigma_angle is not None
+            and self.seed_spot_triplets is not None
+            and self.seed_brightness_correction is not None
+        )
+        lines: List[str] = ["#ACTION\n", ("s\n" if seeded else "m\n")]
+        basic = [
+            self.random_seed,
+            self.ascale,
+            self.num_chains,
+            self.steps_or_time,
+            self.calc_brightness_factor,
+        ]
+        for v in basic:
+            lines.append(self._line(v))
+        if seeded:
+            lines.append(self._line(self.sigma_radius))
+            lines.append(self._line(self.sigma_angle))
+            assert self.seed_spot_triplets is not None
+            for (r, th, ph) in self.seed_spot_triplets:
+                lines.append(self._line(r))
+                lines.append(self._line(th))
+                lines.append(self._line(ph))
+            lines.append(self._line(self.seed_brightness_correction))
+        return "".join(lines)
 
-# --- Serialization helpers ---
-
-def _line(val) -> str:
-    return f"{val}\n"
-
-
-def serialize_common(action: Action) -> str:
-    lines: List[str] = []
-    # PLANET PROPERTIES
-    lines.append("#PLANET PROPERTIES\n")
-    lines.append(_line(len(action.planets)))
-    for p in action.planets:
-        lines.append(_line(p.t0_epoch_days))
-        lines.append(_line(p.period_days))
-        lines.append(_line(p.transit_depth))
-        lines.append(_line(p.duration_days))
-        lines.append(_line(p.impact_parameter))
-        lines.append(_line(p.inclination_deg))
-        lines.append(_line(p.lambda_deg))
-        lines.append(_line(p.ecosw))
-        lines.append(_line(p.esinw))
-
-    # STAR PROPERTIES
-    s = action.star_properties
-    lines.append("#STAR PROPERTIES\n")
-    lines.append(_line(s.mean_stellar_density))
-    lines.append(_line(s.stellar_rotation_period_days))
-    lines.append(_line(s.temperature_kelvin))
-    lines.append(_line(s.stellar_metallicity))
-    lines.append(_line(s.rotation_axis_tilt_deg))
-    lines.append(f"{s.limb_darkening[0]} {s.limb_darkening[1]} {s.limb_darkening[2]} {s.limb_darkening[3]}\n")
-    lines.append(_line(s.num_limb_darkening_rings))
-
-    # SPOT PROPERTIES
-    sp = action.spot_properties
-    lines.append("#SPOT PROPERTIES\n")
-    lines.append(_line(sp.num_spots))
-    lines.append(_line(sp.fractional_brightness))
-
-    # LIGHT CURVE
-    f = action.fitting_properties
-    lines.append("#LIGHT CURVE\n")
-    lines.append(_line(f.data_filename))
-    lines.append(_line(f.start_time))
-    lines.append(_line(f.light_curve_duration_days))
-    lines.append(_line(f.light_data_max))
-    lines.append(_line(1 if f.light_curve_flattened else 0))
-
-    return "".join(lines)
-
-
-def serialize_action_l(action: ActionL) -> str:
-    lines: List[str] = ["#ACTION\n", "l\n"]
-    for (r, th, ph) in action.spot_triplets:
-        lines.append(_line(r))
-        lines.append(_line(th))
-        lines.append(_line(ph))
-    lines.append(_line(action.brightness_correction))
-    return "".join(lines)
-
-
-def serialize_action_m(action: ActionM) -> str:
-    seeded = (
-        action.sigma_radius is not None
-        and action.sigma_angle is not None
-        and action.seed_spot_triplets is not None
-        and action.seed_brightness_correction is not None
-    )
-    lines: List[str] = ["#ACTION\n", ("s\n" if seeded else "m\n")]
-    lines.append(_line(action.random_seed))
-    lines.append(_line(action.ascale))
-    lines.append(_line(action.num_chains))
-    lines.append(_line(action.steps_or_time))
-    lines.append(_line(action.calc_brightness_factor))
-    if seeded:
-        lines.append(_line(action.sigma_radius))
-        lines.append(_line(action.sigma_angle))
-        assert action.seed_spot_triplets is not None
-        for (r, th, ph) in action.seed_spot_triplets:  # type: ignore[misc]
-            lines.append(_line(r))
-            lines.append(_line(th))
-            lines.append(_line(ph))
-        lines.append(_line(action.seed_brightness_correction))
-    return "".join(lines)
-
-
-def expected_output_suffix(action: Action) -> str:
-    if isinstance(action, ActionL):
-        return "_lcout.txt"
-    if isinstance(action, ActionM):
+    def expected_output_suffix(self) -> str:
         return "_finalparam.txt"
-    # Default to err to force early failure if not overridden
-    return "_out.txt"
+
