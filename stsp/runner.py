@@ -156,7 +156,7 @@ class ActionRunner:
         rootname = str(in_path).rsplit(".in", 1)[0]
         return work, rootname
 
-    def run(self, workdir: Optional[Path] = None) -> Tuple[Path, np.ndarray, Path]:
+    def run(self, workdir: Optional[Path] = None, emit_copy: bool = False) -> Tuple[Path, np.ndarray, Optional[Path]]:
         work, rootname = self._prepare_and_run(workdir)
 
         # Read outputs (Action-L style)
@@ -180,18 +180,20 @@ class ActionRunner:
             raise FileNotFoundError("\n\n".join(msg))
         arr = np.loadtxt(out_path)
 
-        # Write a C-compatible copy
-        copy_path = Path(work) / f"{self.input_basename()}-copy.txt"
-        with copy_path.open("w") as f:
-            for row in np.atleast_2d(arr):
-                # Preserve enough precision to avoid loss when re-reading as float64.
-                # Use 17 significant digits which is sufficient for IEEE-754 double.
-                if row.shape[0] >= 4:
-                    f.write(
-                        f"{row[0]:.17g} {row[1]:.17g} {row[2]:.17g} {row[3]:.17g}\n"
-                    )
-                else:
-                    f.write(" ".join(f"{x:.17g}" for x in row) + "\n")
+        copy_path: Optional[Path] = None
+        if emit_copy:
+            # Write a C-compatible copy
+            copy_path = Path(work) / f"{self.input_basename()}-copy.txt"
+            with copy_path.open("w") as f:
+                for row in np.atleast_2d(arr):
+                    # Preserve enough precision to avoid loss when re-reading as float64.
+                    # Use 17 significant digits which is sufficient for IEEE-754 double.
+                    if row.shape[0] >= 4:
+                        f.write(
+                            f"{row[0]:.17g} {row[1]:.17g} {row[2]:.17g} {row[3]:.17g}\n"
+                        )
+                    else:
+                        f.write(" ".join(f"{x:.17g}" for x in row) + "\n")
 
         return work, arr, copy_path
 
@@ -266,7 +268,7 @@ class ActionMRunner(ActionRunner):
             lines.append(f"{c.seed_brightness_correction}\n")
         return "".join(lines)
 
-    def run(self, workdir: Optional[Path] = None) -> Tuple[Path, np.ndarray, Path]:
+    def run(self, workdir: Optional[Path] = None, emit_copy: bool = False) -> Tuple[Path, np.ndarray, Path]:
         work, rootname = self._prepare_and_run(workdir)
 
         # For MCMC actions, primary artifact is finalparam

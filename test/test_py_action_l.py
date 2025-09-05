@@ -69,7 +69,7 @@ def stsp_config_l() -> ActionL:
 def test_action_l_end_to_end(stsp_config_l, tmp_path):
     cfg = stsp_config_l
     runner = ActionLRunner(cfg)
-    workdir, arr, copy_path = runner.run(workdir=tmp_path)
+    workdir, arr, copy_path = runner.run(workdir=tmp_path, emit_copy=True)
 
     # Input file
     in_path = Path(tmp_path) / "pyact-l.in"
@@ -80,7 +80,7 @@ def test_action_l_end_to_end(stsp_config_l, tmp_path):
     assert out_path.exists(), "Missing STSP output file"
 
     # Copy written by Python
-    assert copy_path.exists(), "Missing Python-written copy of output"
+    assert copy_path is not None and copy_path.exists(), "Missing Python-written copy of output"
 
     # Basic shape checks (at least 4 columns, at least 1 row)
     assert isinstance(arr, np.ndarray)
