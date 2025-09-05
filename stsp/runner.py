@@ -6,9 +6,9 @@ from typing import List, Optional, Sequence, Tuple
 import numpy as np
 
 from stsp.stsp import (
-    STSP,
-    STSPActionL,
-    STSPActionM,
+    Action,
+    ActionL,
+    ActionM,
     PlanetProperties,
     StarProperties,
     SpotProperties,
@@ -23,7 +23,7 @@ class ActionRunner:
     can override `input_basename()` to control input/output file roots.
     """
 
-    def __init__(self, config: STSP):
+    def __init__(self, config: Action):
         self.config = config
 
     # ----- Assembly helpers (no side effects) -----
@@ -197,7 +197,7 @@ class ActionRunner:
 
 
 class ActionLRunner(ActionRunner):
-    def __init__(self, config: STSPActionL) -> None:
+    def __init__(self, config: ActionL) -> None:
         super().__init__(config)
         if len(config.spot_triplets) != config.spot_properties.num_spots:
             raise ValueError(
@@ -218,7 +218,7 @@ class ActionLRunner(ActionRunner):
 
 
 class ActionMRunner(ActionRunner):
-    def __init__(self, config: STSPActionM) -> None:
+    def __init__(self, config: ActionM) -> None:
         super().__init__(config)
         seeded_fields = [
             config.sigma_radius,

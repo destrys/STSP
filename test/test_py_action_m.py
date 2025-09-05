@@ -10,7 +10,7 @@ from stsp import (
     StarProperties,
     SpotProperties,
     FittingProperties,
-    STSPActionM,
+    ActionM,
 )
 from stsp.runner import ActionMRunner
 
@@ -64,7 +64,7 @@ def seed_spots() -> List[Tuple[float, float, float]]:
 
 def test_action_m_unseeded(base_components, tmp_path):
     planets, star, spots, fit = base_components
-    cfg = STSPActionM(
+    cfg = ActionM(
         planets=planets,
         star_properties=star,
         spot_properties=spots,
@@ -87,7 +87,7 @@ def test_action_m_unseeded(base_components, tmp_path):
 
 def test_action_m_seeded(base_components, seed_spots, tmp_path):
     planets, star, spots, fit = base_components
-    cfg = STSPActionM(
+    cfg = ActionM(
         planets=planets,
         star_properties=star,
         spot_properties=spots,

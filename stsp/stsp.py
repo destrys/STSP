@@ -81,7 +81,7 @@ class FittingProperties:
 
 
 @dataclass
-class STSP:
+class Action:
     """Top-level STSP configuration container.
 
     - planets: List of planet property objects
@@ -97,7 +97,7 @@ class STSP:
 
 
 @dataclass
-class STSPActionL(STSP):
+class ActionL(Action):
     """STSP configuration for Action-l (generate light curve).
 
     Extends STSP by adding action-specific parameters.
@@ -111,7 +111,7 @@ class STSPActionL(STSP):
 
 
 @dataclass
-class STSPActionM(STSP):
+class ActionM(Action):
     """STSP configuration for affine-invariant MCMC (Action-m/s).
 
     Unseeded (Action-m): provide the 5 MCMC parameters below and leave the

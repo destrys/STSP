@@ -3,7 +3,7 @@ from .stsp import (
     StarProperties,
     SpotProperties,
     FittingProperties,
-    STSP,
-    STSPActionL,
-    STSPActionM,
+    Action,
+    ActionL,
+    ActionM,
 )

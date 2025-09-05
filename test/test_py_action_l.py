@@ -4,12 +4,12 @@ import numpy as np
 import pytest
 
 from stsp.runner import ActionLRunner
-from stsp.stsp import STSPActionL, FittingProperties, PlanetProperties, StarProperties, SpotProperties
+from stsp.stsp import ActionL, FittingProperties, PlanetProperties, StarProperties, SpotProperties
 
 
 
 @pytest.fixture
-def stsp_config_l() -> STSPActionL:
+def stsp_config_l() -> ActionL:
     """Build a sample STSPActionL config matching sample-l.in values."""
     planets = [
         PlanetProperties(
@@ -55,7 +55,7 @@ def stsp_config_l() -> STSPActionL:
         (0.292627124386, 1.100571758314, 4.248530337143),
         (0.300349989200, 1.963252856264, 5.492592578403),
     ]
-    cfg = STSPActionL(
+    cfg = ActionL(
         planets=planets,
         star_properties=star,
         spot_properties=spots,
