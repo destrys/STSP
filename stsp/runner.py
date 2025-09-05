@@ -69,6 +69,8 @@ class ActionRunner:
         lines.append(f"{f.light_data_max}\n")
         lines.append(f"{1 if f.light_curve_flattened else 0}\n")
 
+        lines.append("#ACTION\n")
+
         return "".join(lines)
 
     def assemble_action(self) -> str:
@@ -166,7 +168,6 @@ class ActionLRunner(ActionRunner):
 
     def assemble_action(self) -> str:
         lines: List[str] = []
-        lines.append("#ACTION\n")
         lines.append("l\n")
         for (r, th, ph) in self.config.spot_triplets:  # type: ignore[attr-defined]
             lines.append(f"{r}\n{th}\n{ph}\n")
