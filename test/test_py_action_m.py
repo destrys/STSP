@@ -77,9 +77,7 @@ def test_action_m_unseeded(base_components, tmp_path):
     )
 
     runner = ActionMRunner(cfg)
-    workdir, arr, final_path = runner.run(workdir=tmp_path)
-    produced = Path(final_path)
-    assert produced.exists(), "Missing finalparam output"
+    arr = runner.run(workdir=tmp_path)
     expected = Path("test/test-M_finalparam.txt")
     c = np.loadtxt(expected)
     np.testing.assert_allclose(arr, c, rtol=1e-10, atol=1e-8)
@@ -104,9 +102,7 @@ def test_action_m_seeded(base_components, seed_spots, tmp_path):
     )
 
     runner = ActionMRunner(cfg)
-    workdir, arr, final_path = runner.run(workdir=tmp_path)
-    produced = Path(final_path)
-    assert produced.exists(), "Missing finalparam output"
+    arr = runner.run(workdir=tmp_path)
     expected = Path("test/test-s_finalparam.txt")
     c = np.loadtxt(expected)
     np.testing.assert_allclose(arr, c, rtol=1e-10, atol=1e-8)
