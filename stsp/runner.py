@@ -8,19 +8,6 @@ import numpy as np
 from .stsp import FittingProperties, PlanetProperties, STSP, StarProperties, SpotProperties
 
 
-def _ensure_binary() -> Path:
-    """Ensure ./bin/stsp exists by building it if needed."""
-    repo_root = Path(__file__).resolve().parents[1]
-    bin_path = repo_root / "bin" / "stsp"
-    if bin_path.exists():
-        return bin_path
-    # Build via make
-    subprocess.run(["make"], cwd=str(repo_root), check=True)
-    if not bin_path.exists():
-        raise RuntimeError("Failed to build stsp binary at ./bin/stsp")
-    return bin_path
-
-
 class ActionRunner:
     """Base class to assemble common STSP configuration and run an action.
 
@@ -94,7 +81,6 @@ class ActionRunner:
 
     # ----- Top-level run (side effects) -----
     def run(self, workdir: Optional[Path] = None) -> Tuple[Path, np.ndarray, Path]:
-        bin_path = _ensure_binary()
 
         # Prepare working directory
         made_temp = False
@@ -113,8 +99,8 @@ class ActionRunner:
         in_path = work / f"{self.input_basename()}.in"
         in_path.write_text(common + action)
 
-        # Run stsp
-        subprocess.run([str(bin_path), str(in_path)], cwd=str(work), check=True)
+        # Run stsp (assumes 'stsp' is available on PATH)
+        subprocess.run(["stsp", str(in_path)], cwd=str(work), check=True)
 
         # Read outputs
         rootname = str(in_path).rsplit(".in", 1)[0]
@@ -127,10 +113,14 @@ class ActionRunner:
         copy_path = work / f"{self.input_basename()}-copy.txt"
         with copy_path.open("w") as f:
             for row in np.atleast_2d(arr):
+                # Preserve enough precision to avoid loss when re-reading as float64.
+                # Use 17 significant digits which is sufficient for IEEE-754 double.
                 if row.shape[0] >= 4:
-                    f.write(f"{row[0]:0.9f} {row[1]:0.6f} {row[2]:0.6f} {row[3]:0.6f}\n")
+                    f.write(
+                        f"{row[0]:.17g} {row[1]:.17g} {row[2]:.17g} {row[3]:.17g}\n"
+                    )
                 else:
-                    f.write(" ".join(f"{x:0.6f}" for x in row) + "\n")
+                    f.write(" ".join(f"{x:.17g}" for x in row) + "\n")
 
         return work, arr, copy_path
 
@@ -151,7 +141,7 @@ class ActionLRunner(ActionRunner):
         self.brightness_correction = brightness_correction
 
     def input_basename(self) -> str:
-        return "pyact-l"
+        return f"{super().input_basename()}-l"
 
     def assemble_action(self) -> str:
         lines: List[str] = []
