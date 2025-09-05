@@ -46,17 +46,20 @@ class ActionRunner:
             work = Path(workdir)
             work.mkdir(parents=True, exist_ok=True)
 
-        # Ensure the light curve file is accessible from the working directory
+        # Validate the light curve file exists at the configured path.
+        # If absolute, require it exist. If relative, require it exist under the workdir (stsp runs with cwd=work).
         fit = self.config.fitting_properties
         lc_path = Path(fit.data_filename)
-        if not lc_path.is_absolute():
-            # If a bare filename is provided and it does not exist in workdir,
-            # try to source it from the repo sample/ directory.
-            candidate = work / lc_path.name
+        if lc_path.is_absolute():
+            if not lc_path.exists():
+                raise FileNotFoundError(f"Light curve file not found: {lc_path}")
+        else:
+            candidate = work / lc_path
             if not candidate.exists():
-                repo_candidate = Path(__file__).resolve().parents[1] / "sample" / lc_path.name
-                if repo_candidate.exists():
-                    candidate.write_bytes(repo_candidate.read_bytes())
+                raise FileNotFoundError(
+                    f"Light curve file not found relative to workdir: {candidate}. "
+                    f"Provide an absolute path or ensure the file exists in the working directory."
+                )
 
         # Assemble configuration text
         common = self.assemble_common()

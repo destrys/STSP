@@ -37,8 +37,8 @@ def stsp_config_l() -> ActionL:
 
     spots = SpotProperties(num_spots=6, fractional_brightness=0.70)
 
-    # Use an absolute path so runs in temporary working directories succeed.
-    sample_model = Path(__file__).resolve().parents[1] / "sample" / "model_lc.dat"
+    # Use absolute path to test/model_lc.dat symlink so runner does not need to search.
+    sample_model = Path(__file__).resolve().parent / "model_lc.dat"
     fit = FittingProperties(
         data_filename=str(sample_model),
         start_time=0.0,
