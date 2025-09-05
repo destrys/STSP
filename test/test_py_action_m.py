@@ -69,22 +69,20 @@ def test_action_m_unseeded(base_components, tmp_path):
         star_properties=star,
         spot_properties=spots,
         fitting_properties=fit,
-        random_seed=12345,
+        random_seed=74384338,
         ascale=1.25,
-        num_chains=4,
-        steps_or_time=10,
+        num_chains=2,
+        steps_or_time=100,
         calc_brightness_factor=1,
     )
 
     runner = ActionMRunner(cfg)
-    workdir, arr, copy_path = runner.run(workdir=tmp_path)
-
-    base = Path(tmp_path) / "pyact-m"
-    # Expect MCMC outputs
-    assert (base.with_name("pyact-m_parambest.txt")).exists()
-    assert (base.with_name("pyact-m_mcmc.txt")).exists()
-    assert (base.with_name("pyact-m_finalparam.txt")).exists()
-    # Note: bestlc may be merged with parambest in current C code; skip strict check
+    workdir, arr, final_path = runner.run(workdir=tmp_path)
+    produced = Path(final_path)
+    assert produced.exists(), "Missing finalparam output"
+    expected = Path("test/test-M_finalparam.txt")
+    c = np.loadtxt(expected)
+    np.testing.assert_allclose(arr, c, rtol=1e-10, atol=1e-8)
 
 
 def test_action_m_seeded(base_components, seed_spots, tmp_path):
@@ -94,22 +92,21 @@ def test_action_m_seeded(base_components, seed_spots, tmp_path):
         star_properties=star,
         spot_properties=spots,
         fitting_properties=fit,
-        random_seed=54321,
+        random_seed=74384338,
         ascale=1.25,
-        num_chains=4,
-        steps_or_time=10,
+        num_chains=2,
+        steps_or_time=100,
         calc_brightness_factor=1,
-        sigma_radius=0.002,
-        sigma_angle=0.01,
+        sigma_radius=0.01,
+        sigma_angle=0.1,
         seed_spot_triplets=seed_spots,
         seed_brightness_correction=1.0,
     )
 
     runner = ActionMRunner(cfg)
-    workdir, arr, copy_path = runner.run(workdir=tmp_path)
-
-    base = Path(tmp_path) / "pyact-s"
-    assert (base.with_name("pyact-s_parambest.txt")).exists()
-    assert (base.with_name("pyact-s_mcmc.txt")).exists()
-    assert (base.with_name("pyact-s_finalparam.txt")).exists()
-    # Note: bestlc may be merged with parambest in current C code; skip strict check
+    workdir, arr, final_path = runner.run(workdir=tmp_path)
+    produced = Path(final_path)
+    assert produced.exists(), "Missing finalparam output"
+    expected = Path("test/test-s_finalparam.txt")
+    c = np.loadtxt(expected)
+    np.testing.assert_allclose(arr, c, rtol=1e-10, atol=1e-8)

@@ -88,8 +88,11 @@ class ActionRunner:
         return "pyact"
 
     # ----- Top-level run (side effects) -----
-    def run(self, workdir: Optional[Path] = None) -> Tuple[Path, np.ndarray, Path]:
+    def _prepare_and_run(self, workdir: Optional[Path]) -> Tuple[Path, str]:
+        """Prepare workdir, ensure inputs, write .in, and invoke stsp.
 
+        Returns (workdir_path, rootname_str) where rootname is the input path without .in.
+        """
         # Prepare working directory
         made_temp = False
         if workdir is None:
@@ -150,8 +153,13 @@ class ActionRunner:
                 msg.append(f"--- {err_path.name} (first 40 lines) ---\n" + err_preview)
             raise RuntimeError("\n\n".join(msg))
 
-        # Read outputs
         rootname = str(in_path).rsplit(".in", 1)[0]
+        return work, rootname
+
+    def run(self, workdir: Optional[Path] = None) -> Tuple[Path, np.ndarray, Path]:
+        work, rootname = self._prepare_and_run(workdir)
+
+        # Read outputs (Action-L style)
         out_path = Path(f"{rootname}_lcout.txt")
         if not out_path.exists():
             # Provide helpful diagnostics when expected outputs are missing
@@ -173,7 +181,7 @@ class ActionRunner:
         arr = np.loadtxt(out_path)
 
         # Write a C-compatible copy
-        copy_path = work / f"{self.input_basename()}-copy.txt"
+        copy_path = Path(work) / f"{self.input_basename()}-copy.txt"
         with copy_path.open("w") as f:
             for row in np.atleast_2d(arr):
                 # Preserve enough precision to avoid loss when re-reading as float64.
@@ -257,3 +265,30 @@ class ActionMRunner(ActionRunner):
                 lines.append(f"{r}\n{th}\n{ph}\n")
             lines.append(f"{c.seed_brightness_correction}\n")
         return "".join(lines)
+
+    def run(self, workdir: Optional[Path] = None) -> Tuple[Path, np.ndarray, Path]:
+        work, rootname = self._prepare_and_run(workdir)
+
+        # For MCMC actions, primary artifact is finalparam
+        final_path = Path(f"{rootname}_finalparam.txt")
+        if not final_path.exists():
+            # Bubble up useful info
+            err_path = Path(f"{rootname}_errstsp.txt")
+            msg = [f"Expected output not found: {final_path}"]
+            if err_path.exists():
+                try:
+                    with err_path.open("r") as f:
+                        err_preview = "".join(f.readlines()[:80])
+                    msg.append(f"--- {err_path.name} (first 80 lines) ---\n{err_preview}")
+                except Exception:
+                    pass
+            try:
+                files = "\n".join(sorted(p.name for p in Path(work).iterdir()))
+                msg.append(f"--- workdir listing ({work}) ---\n{files}")
+            except Exception:
+                pass
+            raise FileNotFoundError("\n\n".join(msg))
+
+        # Load as a flat array for convenience
+        arr = np.loadtxt(final_path)
+        return Path(work), arr, final_path
