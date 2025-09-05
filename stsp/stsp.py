@@ -104,6 +104,13 @@ class Action:
         out: List[str] = []
         for f in fields(obj):
             val = getattr(obj, f.name)
+            # Normalize booleans and common boolean-like strings to 0/1 expected by C
+            if isinstance(val, bool):
+                out.append(self._line(1 if val else 0))
+                continue
+            if isinstance(val, str) and val.lower() in ("true", "false"):
+                out.append(self._line(1 if val.lower() == "true" else 0))
+                continue
             if isinstance(val, (list, tuple)):
                 try:
                     out.append(" ".join(str(x) for x in val) + "\n")
@@ -224,4 +231,3 @@ class ActionM(Action):
 
     def expected_output_suffix(self) -> str:
         return "_finalparam.txt"
-

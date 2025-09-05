@@ -50,16 +50,37 @@ class ActionRunner:
         # If absolute, require it exist. If relative, require it exist under the workdir (stsp runs with cwd=work).
         fit = self.config.fitting_properties
         lc_path = Path(fit.data_filename)
+        repo_root = Path(__file__).resolve().parents[1]
+
+        def _ensure_link(src: Path, dst: Path) -> None:
+            if dst.exists():
+                return
+            try:
+                dst.symlink_to(src)
+            except Exception:
+                # Fallback to copy if symlink fails
+                dst.write_bytes(src.read_bytes())
+
         if lc_path.is_absolute():
             if not lc_path.exists():
                 raise FileNotFoundError(f"Light curve file not found: {lc_path}")
+            # Create a short-name link in workdir and rewrite filename in .in to basename
+            local_name = lc_path.name
+            _ensure_link(lc_path, work / local_name)
+            orig = fit.data_filename
+            fit.data_filename = local_name
         else:
             candidate = work / lc_path
             if not candidate.exists():
-                raise FileNotFoundError(
-                    f"Light curve file not found relative to workdir: {candidate}. "
-                    f"Provide an absolute path or ensure the file exists in the working directory."
-                )
+                # Attempt to link from the repository test directory where a symlink typically exists
+                src = repo_root / "test" / lc_path
+                if src.exists():
+                    _ensure_link(src, candidate)
+                else:
+                    raise FileNotFoundError(
+                        f"Light curve file not found in workdir: {candidate}. "
+                        f"Either provide an absolute path, or ensure a copy/symlink exists in the working directory."
+                    )
 
         # Assemble configuration text
         common = self.assemble_common()

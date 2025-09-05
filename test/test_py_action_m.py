@@ -41,7 +41,7 @@ def base_components():
     )
     spots = SpotProperties(num_spots=6, fractional_brightness=0.70)
     fit = FittingProperties(
-        data_filename=str(Path(__file__).resolve().parent / "model_lc.dat"),
+        data_filename="model_lc.dat",
         start_time=0.0,
         light_curve_duration_days=12.0,
         light_data_max=996.942768414,
